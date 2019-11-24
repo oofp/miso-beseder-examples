@@ -22,12 +22,10 @@
 {-# LANGUAGE TypeOperators          #-}
 {-# LANGUAGE TypeSynonymInstances   #-}
 {-# LANGUAGE UndecidableInstances   #-}
--- {-# LANGUAGE ConstraintKinds        #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# OPTIONS_GHC -fomit-interface-pragmas #-}
 {-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
-
 
 module  EntranceDoor where
 
@@ -48,32 +46,13 @@ import           qualified Protolude
 
 data FobReader
 
-{-  
-type InitState m 
-    = '[  ( BinSwitchOff m "door",
-          ( BinMonitorOff m "inDet", 
-          ( BinMonitorOff m "outDet",  
-          ( CommWaitForMsg "fobReader" FobReader () () () m )))) 
-       ]
--}
 
 {-
-type InitState m 
-    = '[  ( BinSwitchOff m "door",
-          ( BinMonitorOff m "inDet", 
-          ( BinMonitorOff m "outDet",  
-          ( CommWaitForMsg "fobReader" (STMComm Bool) Bool Bool () m )))) 
-       ]
--}
-
-{-
-
 type InitState m = 
   '[  ( CommWaitForMsg "fobReader" (STMComm Bool) Bool Bool () m ,
       ( BinSwitchOff m "door",
       ( BinMonitorOff m "inDet", BinMonitorOff m "outDet")))] 
 -}
-
 type FobReaderAlive = "fobReader" :? IsCommAlive 
 
 doorHandler :: forall sp m. Int -> STransData m sp _ ()
@@ -90,9 +69,9 @@ doorHandler doorTimeoutSec = do
       onOrElse @("inDet" :? IsBinMonitorOn :|| "outDet" :? IsBinMonitorOn)
         (restartTimer doorTimeoutSec)
         closeDoor        
-    --assertion    
-    --assertCheck @InvalidConditions
     {-
+    --assertion    
+    assertCheck @InvalidConditions
     on @(Not (By "failure")) $ do  
       on @InvalidConditions $
         newRes #failure (InitData ())

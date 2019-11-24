@@ -52,7 +52,6 @@ import           EntranceDoorModel
 import           EntranceDoor
 import           qualified Protolude 
 
-
 doorConsumer :: TVar Model -> STMConsumer Bool
 doorConsumer tm = STMConsumer (\fl -> modifyTVar tm (\m -> m {doorOpen = fl}))
 
@@ -72,11 +71,6 @@ maybeFromBool :: Bool -> Maybe Bool
 maybeFromBool True = Just True
 maybeFromBool False = Nothing
 
---binMon :: TVar Model -> TaskQ (BinaryMonitor TaskQ)
---binMon tm = undefined
-
--- C:\repo\trunk\androidApps\hs\tk\miso-beseder-examples>
-
 type InitState = 
   '[  ( CommWaitForMsg "fobReader" (STMComm Bool) Bool Bool () TaskQ ,
       ( BinSwitchOff TaskQ "door",
@@ -93,30 +87,6 @@ initHandler tm = do
       op (proxProducer tm outProx) >>= (newRes #outDet . BinaryMonitor)
       doorHandler 5
   termAndClearAllResources  
-      -- on @(By InitState) $ do
-      -- newRes #mark (InitData ())
-    -- (clear #fobReader)  
-    -- doorHandler 10
-
-{-    
-type InitState2 m = 
-  '[ CommInitiated "fobReader" (STMComm Bool) Bool Bool () m]
-
-initHandler2 :: TVar Model -> STransData m NoSplitter _ _
-initHandler2 tm = do
-  newRes #fobReader (fobComm tm)
-
-evalAssert2 :: Proxy '(InitState2 m,'[])
-evalAssert2 = evalSTransData (initHandler2 undefined)
--}
-
-{-    
-type InitState m = 
- '[  ( CommWaitForMsg "fobReader" (STMComm Bool) Bool Bool () m ,
-     ( BinSwitchOff m "door",
-     ( BinMonitorOff m "inDet", BinMonitorOff m "outDet")))] 
--}
-
 
 -- :t evalSTransData (initHandler undefined)
 --evalAssert :: Proxy '(_,'[])
@@ -124,16 +94,4 @@ type InitState m =
 
 --interpretInitHandler :: TVar Model -> STrans (ContT Bool) TaskQ NoSplitter '[()] _ _ _ ()
 --interpretInitHandler tm = interpret (initHandler tm) 
-
-{-
-
-type InitState m 
-    = '[  ( BinSwitchOff "door",
-          ( BinMonitorOff m "inDet", 
-          ( BinMonitorOff m "outDet",  
-          ( CommWaitForMsg "fobReader" FobReader () () () m )))) 
-       ]
-
-type FobReaderAlive = "fobReader" :? IsCommAlive 
--}
 
