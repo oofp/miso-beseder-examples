@@ -1,0 +1,139 @@
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE DefaultSignatures      #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE KindSignatures         #-}
+{-# LANGUAGE MonoLocalBinds         #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE PartialTypeSignatures  #-}
+{-# LANGUAGE PolyKinds              #-}
+{-# LANGUAGE RankNTypes             #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE MonoLocalBinds         #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE PartialTypeSignatures  #-}
+{-# LANGUAGE PolyKinds              #-}
+{-# LANGUAGE RankNTypes             #-}
+{-# LANGUAGE RebindableSyntax       #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE TypeApplications       #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE TypeOperators          #-}
+{-# LANGUAGE TypeSynonymInstances   #-}
+{-# LANGUAGE UndecidableInstances   #-}
+-- {-# LANGUAGE ConstraintKinds        #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE OverloadedLabels #-}
+{-# OPTIONS_GHC -fomit-interface-pragmas #-}
+{-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
+
+
+module  EntranceDoorInit where
+
+import           Protolude                    hiding (Product, handle, return, gets, lift, liftIO,
+                                               (>>), (>>=), forever, until,try,on)
+import           Beseder.Base.ControlData                                               
+import           Beseder.Base.Base
+import           Beseder.Base.Common
+import           Beseder.Misc.Misc
+import           Beseder.Resources.Timer
+import           Beseder.Misc.Prosumers
+import           Beseder.Resources.Monitor.BinaryMonitorRes
+import           Beseder.Resources.State.ImpRes 
+import           Beseder.Resources.State.BinarySwitch
+import           Beseder.Resources.State.DataRes 
+import           Beseder.Resources.Comm
+import           Control.Concurrent.STM
+import           Control.Monad.Cont (ContT)
+
+import           Data.String 
+import           EntranceDoorModel
+import           EntranceDoor
+import           qualified Protolude 
+
+
+doorConsumer :: TVar Model -> STMConsumer Bool
+doorConsumer tm = STMConsumer (\fl -> modifyTVar tm (\m -> m {doorOpen = fl}))
+
+proxProducer :: TVar Model -> (Model -> Bool) -> TaskQ (Producer TaskQ Bool)
+proxProducer tm getter =  stmProducer (getter <$> readTVar tm)
+
+fobComm :: TVar Model -> STMRes Bool
+fobComm tmodel 
+  = CommRes $ STMComm 
+              { stmRecv = (maybeFromBool . fobDetected) <$> readTVar tmodel
+              , stmSend = (\fl -> modifyTVar tmodel (\m -> m {fobDetected = fl}))
+              , stmAckMsg = const False
+              , stmCloseMsg = Nothing 
+              }
+
+maybeFromBool :: Bool -> Maybe Bool
+maybeFromBool True = Just True
+maybeFromBool False = Nothing
+
+--binMon :: TVar Model -> TaskQ (BinaryMonitor TaskQ)
+--binMon tm = undefined
+
+-- C:\repo\trunk\androidApps\hs\tk\miso-beseder-examples>
+
+type InitState = 
+  '[  ( CommWaitForMsg "fobReader" (STMComm Bool) Bool Bool () TaskQ ,
+      ( BinSwitchOff TaskQ "door",
+      ( BinMonitorOff TaskQ "inDet", BinMonitorOff TaskQ "outDet"))),()] 
+
+
+initHandler :: TVar Model -> STransData TaskQ NoSplitter _ _
+initHandler tm = do
+  newRes #fobReader (fobComm tm)
+  nextEv
+  try @("fobReader" :? IsCommAlive) $ do
+      op (binSwRes (doorConsumer tm)) >>= newRes #door  
+      op (proxProducer tm inProx) >>= (newRes #inDet . BinaryMonitor)
+      op (proxProducer tm outProx) >>= (newRes #outDet . BinaryMonitor)
+      doorHandler 5
+  termAndClearAllResources  
+      -- on @(By InitState) $ do
+      -- newRes #mark (InitData ())
+    -- (clear #fobReader)  
+    -- doorHandler 10
+
+{-    
+type InitState2 m = 
+  '[ CommInitiated "fobReader" (STMComm Bool) Bool Bool () m]
+
+initHandler2 :: TVar Model -> STransData m NoSplitter _ _
+initHandler2 tm = do
+  newRes #fobReader (fobComm tm)
+
+evalAssert2 :: Proxy '(InitState2 m,'[])
+evalAssert2 = evalSTransData (initHandler2 undefined)
+-}
+
+{-    
+type InitState m = 
+ '[  ( CommWaitForMsg "fobReader" (STMComm Bool) Bool Bool () m ,
+     ( BinSwitchOff m "door",
+     ( BinMonitorOff m "inDet", BinMonitorOff m "outDet")))] 
+-}
+
+
+-- :t evalSTransData (initHandler undefined)
+--evalAssert :: Proxy '(_,'[])
+--evalAssert = evalSTransData (initHandler undefined)
+
+--interpretInitHandler :: TVar Model -> STrans (ContT Bool) TaskQ NoSplitter '[()] _ _ _ ()
+--interpretInitHandler tm = interpret (initHandler tm) 
+
+{-
+
+type InitState m 
+    = '[  ( BinSwitchOff "door",
+          ( BinMonitorOff m "inDet", 
+          ( BinMonitorOff m "outDet",  
+          ( CommWaitForMsg "fobReader" FobReader () () () m )))) 
+       ]
+
+type FobReaderAlive = "fobReader" :? IsCommAlive 
+-}
+

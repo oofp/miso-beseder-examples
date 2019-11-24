@@ -1,0 +1,86 @@
+name:                miso-beseder-examples
+version:             0.1.1.0
+-- synopsis:
+-- description:
+homepage:            https://github.com/oofp/miso-beseder-examples#readme
+license:             OtherLicense
+license-file:        LICENSE
+author:              oofp
+maintainer:          oofp
+copyright:           2018-2020 oofp
+category:            Control
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library 
+  hs-source-dirs:      src
+  ghc-options:         -Wall 
+  exposed-modules:     Beseder.Miso.BesederMiso
+  other-modules:       
+  build-depends:       base >= 4.7 && < 5
+                     , protolude
+                     , network
+                     , text
+                     , containers
+                     , async
+                     , stm
+                     , haskus-utils
+                     , mtl
+                     , random
+                     , websockets
+                     , network
+                     , bytestring
+                     , template-haskell
+                     , alarmclock
+                     , type-errors
+                     , process
+                     , pretty-simple
+  default-language:    Haskell2010
+  default-extensions:  OverloadedStrings, NoImplicitPrelude
+
+executable HelloMisoSTM
+  hs-source-dirs:      ./Examples/HelloMisoSTM
+  main-is:             Main.hs
+  other-modules:       HelloModel
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-T -dshow-passes -fomit-interface-pragmas -fprint-potential-instances
+  build-depends:       base
+                    , beseder
+                    , miso
+                    , miso-stm
+                    , jsaddle
+                    , jsaddle-warp
+                    , text
+                    , mtl
+                    , stm
+                    , protolude
+                    , haskus-utils
+                    , random-shuffle
+                    , bytestring
+  default-language:    Haskell2010
+  default-extensions:  OverloadedStrings, NoImplicitPrelude
+
+executable EntranceDoorApp
+  hs-source-dirs:      ./Examples/EntranceDoor
+  main-is:             Main.hs
+  other-modules:       EntranceDoor
+  ghc-options:         -Wall -threaded -rtsopts -with-rtsopts=-T -dshow-passes -fomit-interface-pragmas -fprint-potential-instances
+  build-depends:       base
+                    , beseder
+                    , miso
+                    , miso-stm
+                    , jsaddle
+                    , jsaddle-warp
+                    , text
+                    , mtl
+                    , stm
+                    , protolude
+                    , haskus-utils
+                    , random-shuffle
+                    , bytestring
+  default-language:    Haskell2010
+  default-extensions:  OverloadedStrings, NoImplicitPrelude
+
+source-repository head
+  type:     git
+  location: https://github.com/oofp/Beseder
