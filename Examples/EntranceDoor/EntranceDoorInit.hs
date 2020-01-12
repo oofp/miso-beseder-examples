@@ -34,29 +34,23 @@ module  EntranceDoorInit where
 import           Protolude                    hiding (Product, handle, return, gets, lift, liftIO,
                                                (>>), (>>=), forever, until,try,on)
 import           Beseder.Base.ControlData                                               
-import           Beseder.Base.Base
-import           Beseder.Base.Common
 import           Beseder.Misc.Misc
-import           Beseder.Resources.Timer
 import           Beseder.Misc.Prosumers
-import           Beseder.Resources.Monitor.BinaryMonitorRes
-import           Beseder.Resources.State.ImpRes 
-import           Beseder.Resources.State.BinarySwitch
-import           Beseder.Resources.State.DataRes 
+import           Beseder.Resources.Monitor
+import           Beseder.Resources.Switch
 import           Beseder.Resources.Comm
 import           Control.Concurrent.STM
-import           Control.Monad.Cont (ContT)
-
-import           Data.String 
 import           EntranceDoorModel
 import           EntranceDoor
-import           qualified Protolude 
 
 doorConsumer :: TVar Model -> STMConsumer Bool
 doorConsumer tm = STMConsumer (\fl -> modifyTVar tm (\m -> m {doorOpen = fl}))
 
-proxProducer :: TVar Model -> (Model -> Bool) -> TaskQ (Producer TaskQ Bool)
-proxProducer tm getter =  stmProducer (getter <$> readTVar tm)
+mkDoorSwitch :: TVar Model -> TaskQ (BinSwitchConsRes TaskQ)
+mkDoorSwitch tm = mkBinSwitchCons <$> (consumer $ doorConsumer tm)
+
+mkPrxMonitor :: TVar Model -> (Model -> Bool) -> TaskQ (BinaryMonitorProdRes TaskQ)
+mkPrxMonitor tm getter =  mkBinaryMonitorProd <$> stmProducer (getter <$> readTVar tm)
 
 fobComm :: TVar Model -> STMRes Bool
 fobComm tmodel 
@@ -71,20 +65,14 @@ maybeFromBool :: Bool -> Maybe Bool
 maybeFromBool True = Just True
 maybeFromBool False = Nothing
 
-type InitState = 
-  '[  ( CommWaitForMsg "fobReader" (STMComm Bool) Bool Bool () TaskQ ,
-      ( BinSwitchOff TaskQ "door",
-      ( BinMonitorOff TaskQ "inDet", BinMonitorOff TaskQ "outDet"))),()] 
-
-
 initHandler :: TVar Model -> STransData TaskQ NoSplitter _ _
 initHandler tm = do
   newRes #fobReader (fobComm tm)
   nextEv
   try @("fobReader" :? IsCommAlive) $ do
-      op (binSwRes (doorConsumer tm)) >>= newRes #door  
-      op (proxProducer tm inProx) >>= (newRes #inDet . BinaryMonitor)
-      op (proxProducer tm outProx) >>= (newRes #outDet . BinaryMonitor)
+      op (mkDoorSwitch tm) >>= newRes #door  
+      op (mkPrxMonitor tm inProx) >>= newRes #inDet 
+      op (mkPrxMonitor tm outProx) >>= newRes #outDet
       doorHandler 5
   termAndClearAllResources  
 

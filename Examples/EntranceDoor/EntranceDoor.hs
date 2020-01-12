@@ -22,56 +22,58 @@
 {-# LANGUAGE TypeOperators          #-}
 {-# LANGUAGE TypeSynonymInstances   #-}
 {-# LANGUAGE UndecidableInstances   #-}
+-- {-# LANGUAGE ConstraintKinds        #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE TemplateHaskell        #-}
+
 {-# OPTIONS_GHC -fomit-interface-pragmas #-}
 {-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
 
 module  EntranceDoor where
 
-import           Protolude                    hiding (Product, handle, return, gets, lift, liftIO,
+import           Protolude                    hiding (Product, Any, handle, return, gets, lift, liftIO,
                                                (>>), (>>=), forever, until,try,on)
 import           Beseder.Base.ControlData                                               
-import           Beseder.Base.Base
-import           Beseder.Base.Common
-import           Beseder.Misc.Misc
 import           Beseder.Resources.Timer
-import           Beseder.Resources.Monitor.BinaryMonitorRes
-import           Beseder.Resources.State.ImpRes 
-import           Beseder.Resources.State.BinarySwitch
-import           Beseder.Resources.State.DataRes 
+import           Beseder.Resources.Monitor
+import           Beseder.Resources.Switch
 import           Beseder.Resources.Comm 
 import           Data.String 
-import           qualified Protolude 
+import           GHC.Exts (Any)    
 
-data FobReader
+data FobReader = FobReader 
 
+type InitState m doorSw monRes
+    = '[  ( StBinSwitchOff m doorSw "door",
+          ( StBinMonitorOff m monRes "inDet", 
+          ( StBinMonitorOff m monRes "outDet",  
+          ( CommWaitForMsg "fobReader" FobReader () () () m )))) 
+       ]
 
-{-
-type InitState m = 
-  '[  ( CommWaitForMsg "fobReader" (STMComm Bool) Bool Bool () m ,
-      ( BinSwitchOff m "door",
-      ( BinMonitorOff m "inDet", BinMonitorOff m "outDet")))] 
--}
 type FobReaderAlive = "fobReader" :? IsCommAlive 
 
+doorHandlerCon :: forall sp m. Int -> STransData m sp _ ()
+doorHandlerCon doorTimeoutSec = do 
+  try @FobReaderAlive $ do
+    doorHandler doorTimeoutSec 
+  termAndClearAllResources  
+
 doorHandler :: forall sp m. Int -> STransData m sp _ ()
-doorHandler doorTimeoutSec = do 
+doorHandler doorTimeoutSec = 
   handleEvents $ do
-    --nextEv
     on @("fobReader" :? IsMessageReceived) $ do 
       invoke #fobReader GetNextMsg
       openDoorIfClosed doorTimeoutSec       
     on @("inDet" :? IsBinMonitorOn) $ do 
-      openDoorIfClosed doorTimeoutSec
-    --nextEv      
+      openDoorIfClosed doorTimeoutSec    
     on @("doorTimer" :? IsTimerTriggered) $ do 
       onOrElse @("inDet" :? IsBinMonitorOn :|| "outDet" :? IsBinMonitorOn)
         (restartTimer doorTimeoutSec)
         closeDoor        
-    {-
     --assertion    
-    assertCheck @InvalidConditions
+    -- assertCheck @InvalidConditions
+    {-
     on @(Not (By "failure")) $ do  
       on @InvalidConditions $
         newRes #failure (InitData ())
@@ -80,6 +82,7 @@ openDoorIfClosed :: Int -> STransData m sp _ ()
 openDoorIfClosed doorTimeoutSec = do
   on @("door" :? IsBinSwitchOff) $ do
     invoke #door TurnOn
+    label #doorOpen
     newRes #doorTimer TimerRes
     invoke #doorTimer (StartTimer doorTimeoutSec)
 
@@ -87,6 +90,7 @@ closeDoor :: STransData m sp _ ()
 closeDoor = do
   clear #doorTimer   
   invoke #door TurnOff
+  label #doorClosed
 
 restartTimer :: Int -> STransData m sp _ () 
 restartTimer doorTimeoutSec = do
@@ -102,19 +106,12 @@ assertDoorHandler doorTimeoutSec =
   try @(Not (By "failure")) $ do
     doorHandler doorTimeoutSec
 
---evalDoorHandler = evalSTransData' (normalDoorHandler 5) (Proxy @(InitState IO))
+mkSTransDataTypeAny "doorHandler" "DoorHandler"
+mkSTransDataTypeAny "doorHandlerCon" "DoorHandlerCon"
 
-type InvalidConditions =
-  ("doorTimer" :? IsTimerTriggered 
-  :|| ("door" :? IsBinSwitchOn :&& (Not ("doorTimer" :? IsTimerArmed))) 
-  :|| ("door" :? IsBinSwitchOff :&& ("inDet" :? IsBinMonitorOn)) 
-  :|| ("door" :? IsBinSwitchOff :&& ("outDet" :? IsBinMonitorOn)) --invalid 
-  )
+-- :kind! Eval (DoorHandler FobReaderAlive (InitState IO () ()))
+-- :kind! Eval (DoorHandlerCon NoSplitter (InitState IO () ()))
+-- :kind!  ValidateSteps '[] DoorHandler FobReaderAlive (InitState IO () ())
+-- :kind!  ValidateSteps '[] DoorHandlerCon FobReaderAlive (InitState IO () ())
+-- :kind! StateDiagramSym  DoorHandlerCon (InitState IO () ())
 
-assertCheck :: forall cond m sp. STransData m sp _ ()     
-assertCheck = do
-  on @(Not (By "failure")) $ do  
-    on @cond $
-      newRes #failure (InitData ())
-  
---evalAssertDoorHandler = evalSTransData' (assertDoorHandler 5) (Proxy @(InitState IO))

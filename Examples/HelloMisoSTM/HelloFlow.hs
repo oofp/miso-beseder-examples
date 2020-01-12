@@ -34,18 +34,12 @@ module  HelloFlow where
 import           Protolude                    hiding (Product, handle, return, gets, lift, liftIO,
                                                (>>), (>>=), forever, until,try,on)
 import           Beseder.Base.ControlData                                               
-import           Beseder.Base.Base
-import           Beseder.Base.Common
 import           Beseder.Misc.Misc
 import           Beseder.Resources.Timer
 import           Beseder.Misc.Prosumers
-import           Beseder.Resources.Monitor.BinaryMonitorRes
-import           Beseder.Resources.State.ImpRes 
-import           Beseder.Resources.State.BinarySwitch
-import           Beseder.Resources.State.DataRes 
+import           Beseder.Resources.Monitor
 import           Beseder.Resources.Comm
 import           Control.Concurrent.STM
-import           Control.Monad.Cont (ContT)
 
 import           Data.String 
 import           HelloModel
@@ -54,6 +48,11 @@ import           qualified Protolude
 
 checkProducer :: TVar Model -> TaskQ (Producer TaskQ Bool)
 checkProducer tm =  stmProducer (checked <$> readTVar tm)
+
+mkCheckMonitor :: TVar Model -> TaskQ (BinaryMonitorProdRes TaskQ)
+mkCheckMonitor tm =  mkBinaryMonitorProd <$> checkProducer tm
+
+
 
 maybeFromBool :: Bool -> Maybe Bool
 maybeFromBool True = Just True
@@ -73,7 +72,7 @@ helloFlow tm = do
   newRes #btn (btnComm tm)
   nextEv
   try @("btn" :? IsCommAlive) $ do
-      op (checkProducer tm) >>= (newRes #ch . BinaryMonitor)
+      op (mkCheckMonitor tm) >>= newRes #ch 
       --nextEv
       handleEvents $ do
         on @("btn" :? IsMessageReceived) $ do 
@@ -86,7 +85,7 @@ helloFlow tm = do
 
 helloFlow2 :: TVar Model -> STransData TaskQ NoSplitter _ _
 helloFlow2 tm = do
-  op (checkProducer tm) >>= (newRes #ch . BinaryMonitor)
+  op (mkCheckMonitor tm) >>= newRes #ch 
   newRes #t TimerRes
   invoke #t (StartTimer 3600)
   try @("t" :? IsTimerArmed) $ do
@@ -105,7 +104,7 @@ helloFlow3 tm = do
   invoke #t (StartTimer 36)
   newRes #t1 TimerRes
   invoke #t1 (StartTimer 3)
-  op (checkProducer tm) >>= (newRes #ch . BinaryMonitor)
+  op (mkCheckMonitor tm) >>= newRes #ch 
   try @("t" :? IsTimerArmed) $ do
     handleEvents $ do
       liftIO $ putStrLn ("handleEvents ...." :: Text)

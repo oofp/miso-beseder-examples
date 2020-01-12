@@ -3,10 +3,8 @@ module Main where
 import Protolude    
 import Miso hiding (go)
 import Miso.String
-import Control.Monad.IO.Class
 import Language.Javascript.JSaddle.Warp as JSaddle
 import Control.Concurrent.STM
-import Data.Text
 import Miso.STM.MisoSTM
 import EntranceDoorModel
 import EntranceDoorApp
@@ -26,8 +24,8 @@ testView =
 
 main :: IO ()
 main = do
+    putStrLn ("Visit http://localhost:8000/ for 'door simulation'" :: Text)
     JSaddle.run 8000 $ startApp =<< mkBoundApp (srvApp defaultModel) defaultModel testView
-
 
 srvApp :: Model -> TVar Model -> IO ()
 srvApp initModel tmodel = do 

@@ -26,6 +26,7 @@ testView =
 
 main :: IO ()
 main = do
+    putStrLn ("Visit http://localhost:8000/ for try the app" :: Text)
     JSaddle.run 8000 $ startApp =<< mkBoundApp (srvApp defaultModel) defaultModel testView
     --newTVarIO defaultModel >>= helloApp
 
